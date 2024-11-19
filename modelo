@@ -1,0 +1,73 @@
+from math import *
+from scipy.integrate import odeint
+import numpy as np
+import matplotlib.pyplot as plt
+# Parâmetros constantes
+T0 = 25        # Temperatura inicial da chapa (em °C)
+Q = 4000       # Quantidade total de energia da fonte de calor
+lambda_ = 0.45    # Condutividade térmica (em W/mm°C)
+v = 0.5        # Velocidade da fonte de calor (em mm/s)
+h = 7.8          # Espessura da chapa (em mm)
+num_terms = 250  # Número de termos para truncar a soma infinita
+p = 0.00785         # densidade do aço em (g/mm3)
+c = 0.8      # calor especifico do aço em (J/g °C)
+k = lambda_/(p*c)
+# Calculando alpha a partir de v e k
+alpha = v / (2 * k)
+
+# Funções para R, R_n e R'_n
+def calculate_R(w, y, z):
+    return np.sqrt(w**2 + y**2 + z**2)
+
+def calculate_Rn(w, y, z, n, h):
+    return np.sqrt(w**2 + y**2 + (2 * n * h - z)**2)
+
+def calculate_Rn_prime(w, y, z, n, h):
+    return np.sqrt(w**2 + y**2 + (2 * n * h + z)**2)
+
+# Função para calcular a temperatura T em função de x, y, z e t
+def calculate_temperature(x, y, z, t):
+    # Calcula w = x - vt
+    w = x - v * t
+    R = calculate_R(w, y, z)
+    exp_term = np.exp(-alpha * w)
+    
+    # Primeiro termo fora da soma
+    T = T0 + (Q / (2 * np.pi * lambda_)) * exp_term * (np.exp(-alpha) / R)
+    
+    # Soma infinita truncada
+    sum_term = 0
+    for n in range(1, num_terms + 1):
+        Rn = calculate_Rn(w, y, z, n, h)
+        Rn_prime = calculate_Rn_prime(w, y, z, n, h)
+        sum_term += (np.exp(-alpha * Rn) / Rn) + (np.exp(-alpha * Rn_prime) / Rn_prime)
+    
+    # Termo total
+    T += (Q / (2 * np.pi * lambda_)) * exp_term * sum_term
+    return T
+
+# Parâmetros do mapa de calor
+x_min, x_max = -50, 50  # Limites da grade em x (mm)
+y_min, y_max = -100, 100  # Limites da grade em y (mm)
+z = 2             # Posição fixa em z (mm)
+t = 1                 # Tempo em segundos
+
+# Cria uma grade de pontos (x, y)
+x_points = np.linspace(x_min, x_max, 100)
+y_points = np.linspace(y_min, y_max, 100)
+X, Y = np.meshgrid(x_points, y_points)
+
+# Calcula a temperatura em cada ponto da grade
+temperature_grid = np.zeros_like(X)
+for i in range(X.shape[0]):
+    for j in range(X.shape[1]):
+        temperature_grid[i, j] = calculate_temperature(X[i, j], Y[i, j], z, t)
+
+# Criação do mapa de calor
+plt.figure(figsize=(8, 6))
+plt.contourf(X, Y, temperature_grid, levels=50, cmap='hot')
+plt.colorbar(label="Temperatura (°C)")
+plt.xlabel("x (mm)")
+plt.ylabel("y (mm)")
+plt.title(f"Distribuição de Temperatura a uma profundidade de {z} mm \n e velocidade de {v} mm/s")
+plt.show()
